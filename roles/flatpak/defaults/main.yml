@@ -1,0 +1,7 @@
+---
+flatpak_auto_update: true
+flatpak_update_calendar: 'daily'
+
+crealityprint_asset_patterns:
+  x86_64: 'CrealityPrint-Linux-flatpak_.*_x86_64\.flatpak$'
+  aarch64: 'CrealityPrint-V.*-linux-aarch64-Release\.flatpak$'

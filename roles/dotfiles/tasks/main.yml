@@ -1,0 +1,52 @@
+---
+- name: 'Install Git to fetch the dotfiles'
+  ansible.builtin.apt:
+    name: 'git'
+    state: 'present'
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+
+- name: 'Give the desktop user ownership of /opt without recursive changes'
+  ansible.builtin.file:
+    path: '/opt'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+
+- name: 'Clone or update the desktop user dotfiles over HTTPS'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.git:
+    repo: 'https://github.com/oxodao/dotfiles.git'
+    dest: '/opt/dotfiles'
+    version: 'master'
+    update: true
+
+- name: 'Switch origin to SSH for subsequent user pushes'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['git', '-C', '/opt/dotfiles', 'remote', 'set-url', 'origin', 'git@github.com:oxodao/dotfiles.git']
+  changed_when: true
+
+- name: 'Inspect the user configuration path without following symlinks'
+  ansible.builtin.stat:
+    path: '/home/{{ desktop_user }}/.config'
+    follow: false
+  register: 'dotfiles_config'
+
+- name: 'Delete the existing configuration when it is not a symlink'
+  ansible.builtin.file:
+    path: '/home/{{ desktop_user }}/.config'
+    state: 'absent'
+  when: 'not (dotfiles_config.stat.islnk | default(false))'
+
+- name: 'Link the dotfiles configuration unless a symlink already exists'
+  ansible.builtin.file:
+    src: '/opt/dotfiles/config'
+    dest: '/home/{{ desktop_user }}/.config'
+    state: 'link'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    follow: false
+  when: 'not (dotfiles_config.stat.islnk | default(false))'

@@ -1,0 +1,35 @@
+---
+sdkman_directory: '/home/{{ desktop_user }}/.sdkman'
+sdkman_temporary_home: '/tmp/autodebian-sdkman-home-{{ desktop_user }}'
+nvm_directory: '/home/{{ desktop_user }}/.nvm'
+
+vscode_directory: '/opt/vscode'
+vscode_download_directory: '/tmp/autodebian-vscode'
+vscode_architectures:
+  x86_64: 'x64'
+  aarch64: 'arm64'
+  armv7l: 'armhf'
+
+jetbrains_directory: '/opt/jetbrains'
+jetbrains_download_directory: '/tmp/autodebian-jetbrains'
+
+# IntelliJ IDEA Ultimate utilise le code IIU. Remplacer par IIC pour la Community.
+jetbrains_products:
+  - name: 'phpstorm'
+    display_name: 'PhpStorm'
+    code: 'PS'
+    command: 'phpstorm'
+    script: 'phpstorm.sh'
+    icon: 'phpstorm.svg'
+  - name: 'datagrip'
+    display_name: 'DataGrip'
+    code: 'DG'
+    command: 'datagrip'
+    script: 'datagrip.sh'
+    icon: 'datagrip.svg'
+  - name: 'idea'
+    display_name: 'IntelliJ IDEA'
+    code: 'IIU'
+    command: 'idea'
+    script: 'idea.sh'
+    icon: 'idea.svg'

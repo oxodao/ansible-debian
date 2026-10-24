@@ -1,0 +1,50 @@
+---
+- name: 'Check whether SDKMAN is installed'
+  ansible.builtin.stat:
+    path: '{{ sdkman_directory }}/bin/sdkman-init.sh'
+  register: 'sdkman_init'
+
+- name: 'Create a temporary home for the SDKMAN installer'
+  ansible.builtin.file:
+    path: '{{ sdkman_temporary_home }}'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+  when: 'not sdkman_init.stat.exists'
+
+- name: 'Download the SDKMAN installer'
+  ansible.builtin.get_url:
+    url: 'https://get.sdkman.io'
+    dest: '/tmp/autodebian-sdkman-install.sh'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  when: 'not sdkman_init.stat.exists'
+
+- name: 'Install SDKMAN without modifying the user shell configuration'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/bin/bash', '/tmp/autodebian-sdkman-install.sh']
+  environment:
+    HOME: '{{ sdkman_temporary_home }}'
+    ZDOTDIR: '{{ sdkman_temporary_home }}'
+    SDKMAN_DIR: '{{ sdkman_directory }}'
+  when: 'not sdkman_init.stat.exists'
+
+- name: 'Remove the temporary SDKMAN installer files'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: 'absent'
+  loop:
+    - '/tmp/autodebian-sdkman-install.sh'
+    - '{{ sdkman_temporary_home }}'
+
+- name: 'Verify the SDKMAN installation'
+  ansible.builtin.stat:
+    path: '{{ sdkman_directory }}/bin/sdkman-init.sh'
+  register: 'sdkman_installed'
+
+- name: 'Require SDKMAN after installation'
+  ansible.builtin.assert:
+    that: 'sdkman_installed.stat.exists'

@@ -1,0 +1,20 @@
+---
+- name: 'Install Docker and its command-line tools'
+  ansible.builtin.import_tasks: 'docker.yml'
+  tags: ['docker']
+
+- name: 'Install SDKMAN for Java'
+  ansible.builtin.import_tasks: 'sdkman.yml'
+  tags: ['sdkman', 'java']
+
+- name: 'Install NVM for Node.js'
+  ansible.builtin.import_tasks: 'nvm.yml'
+  tags: ['nvm', 'node']
+
+- name: 'Integrate a manually installed VS Code'
+  ansible.builtin.import_tasks: 'vscode.yml'
+  tags: ['vscode']
+
+- name: 'Install JetBrains desktop applications'
+  ansible.builtin.import_tasks: 'jetbrains.yml'
+  tags: ['jetbrains']

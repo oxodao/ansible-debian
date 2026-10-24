@@ -1,0 +1,152 @@
+---
+- name: 'Install native Wayland Rofi, plugin dependencies and adapters'
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    state: 'present'
+    name:
+      - 'rofi'
+      - 'rofi-dev'
+      - 'qalc'
+      - 'wl-clipboard'
+      - 'wtype'
+      - 'autoconf'
+      - 'automake'
+      - 'build-essential'
+      - 'ca-certificates'
+      - 'git'
+      - 'libcairo2-dev'
+      - 'libglib2.0-dev'
+      - 'libtool'
+      - 'libtool-bin'
+      - 'meson'
+      - 'ninja-build'
+      - 'pkgconf'
+
+- name: 'Read the Rofi plugin ABI version'
+  ansible.builtin.command: 'pkg-config --modversion rofi'
+  register: 'rofi_version'
+  changed_when: false
+
+- name: 'Read the Rofi plugin installation directory'
+  ansible.builtin.command: 'pkg-config --variable=pluginsdir rofi'
+  register: 'rofi_plugin_directory'
+  changed_when: false
+
+- name: 'Resolve the latest published Rofi plugin releases'
+  ansible.builtin.uri:
+    url: 'https://api.github.com/repos/{{ item.repository }}/releases/latest'
+    return_content: true
+  loop:
+    - {name: 'rofi-calc', repository: 'svenstaro/rofi-calc', library: 'libcalc.so'}
+    - {name: 'rofi-emoji', repository: 'Mange/rofi-emoji', library: 'emoji.so'}
+  register: 'rofi_releases'
+  check_mode: false
+
+- name: 'Build and install the calculator plugin'
+  vars:
+    rofi_plugin: '{{ rofi_releases.results[0] }}'
+    rofi_plugin_source: '/tmp/autodebian-{{ rofi_plugin.item.name }}-{{ desktop_user }}-{{ rofi_plugin.json.tag_name }}-{{ rofi_version.stdout }}'
+  block:
+    - name: 'Create a user-owned calculator source directory'
+      ansible.builtin.file:
+        path: '{{ rofi_plugin_source }}'
+        state: 'directory'
+        owner: '{{ desktop_user }}'
+        group: '{{ desktop_gid }}'
+        mode: '0755'
+
+    - name: 'Fetch the published calculator release'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.git:
+        repo: 'https://github.com/{{ rofi_plugin.item.repository }}.git'
+        dest: '{{ rofi_plugin_source }}'
+        version: '{{ rofi_plugin.json.tag_name }}'
+        depth: 1
+
+    - name: 'Check whether the calculator plugin is installed'
+      ansible.builtin.stat:
+        path: '{{ rofi_plugin_directory.stdout }}/{{ rofi_plugin.item.library }}'
+      register: 'rofi_installed_calc'
+
+    - name: 'Configure the calculator plugin'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.command:
+        argv: ['meson', 'setup', 'build', '--prefix=/usr/local']
+        chdir: '{{ rofi_plugin_source }}'
+        creates: '{{ rofi_plugin_source }}/build/build.ninja'
+
+    - name: 'Compile the calculator plugin'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.command:
+        argv: ['ninja', '-C', 'build']
+        chdir: '{{ rofi_plugin_source }}'
+      environment:
+        LC_ALL: 'C'
+      register: 'rofi_calc_build'
+      changed_when: '"no work to do" not in rofi_calc_build.stdout'
+
+    - name: 'Install the calculator plugin in the Rofi plugin directory'
+      ansible.builtin.command:
+        argv: ['meson', 'install', '-C', 'build', '--no-rebuild']
+        chdir: '{{ rofi_plugin_source }}'
+      when: 'rofi_calc_build.changed or not rofi_installed_calc.stat.exists'
+      changed_when: true
+
+- name: 'Build and install the emoji plugin'
+  vars:
+    rofi_plugin: '{{ rofi_releases.results[1] }}'
+    rofi_plugin_source: '/tmp/autodebian-{{ rofi_plugin.item.name }}-{{ desktop_user }}-{{ rofi_plugin.json.tag_name }}-{{ rofi_version.stdout }}'
+  block:
+    - name: 'Create a user-owned emoji source directory'
+      ansible.builtin.file:
+        path: '{{ rofi_plugin_source }}'
+        state: 'directory'
+        owner: '{{ desktop_user }}'
+        group: '{{ desktop_gid }}'
+        mode: '0755'
+
+    - name: 'Fetch the published emoji release'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.git:
+        repo: 'https://github.com/{{ rofi_plugin.item.repository }}.git'
+        dest: '{{ rofi_plugin_source }}'
+        version: '{{ rofi_plugin.json.tag_name }}'
+        depth: 1
+
+    - name: 'Check whether the emoji plugin is installed'
+      ansible.builtin.stat:
+        path: '{{ rofi_plugin_directory.stdout }}/{{ rofi_plugin.item.library }}'
+      register: 'rofi_installed_emoji'
+
+    - name: 'Generate the emoji plugin configure script'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.command:
+        argv: ['autoreconf', '-i']
+        chdir: '{{ rofi_plugin_source }}'
+        creates: '{{ rofi_plugin_source }}/configure'
+
+    - name: 'Configure the emoji plugin'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.command:
+        argv: ['./configure', '--prefix=/usr/local']
+        chdir: '{{ rofi_plugin_source }}'
+        creates: '{{ rofi_plugin_source }}/Makefile'
+
+    - name: 'Compile the emoji plugin'
+      become_user: '{{ desktop_user }}'
+      ansible.builtin.command:
+        argv: ['make', '-j2']
+        chdir: '{{ rofi_plugin_source }}'
+      environment:
+        LC_ALL: 'C'
+      register: 'rofi_emoji_build'
+      changed_when: '"Nothing to be done" not in rofi_emoji_build.stdout'
+
+    - name: 'Install the emoji plugin and its emoji database'
+      ansible.builtin.command:
+        argv: ['make', 'install']
+        chdir: '{{ rofi_plugin_source }}'
+      when: 'rofi_emoji_build.changed or not rofi_installed_emoji.stat.exists'
+      changed_when: true

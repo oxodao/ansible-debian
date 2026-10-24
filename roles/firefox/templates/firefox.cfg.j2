@@ -1,0 +1,9 @@
+// The first line is ignored by Firefox AutoConfig.
+{% for name, preference in firefox_autoconfig_preferences.items() %}
+{% set function = {'default': 'defaultPref', 'locked': 'lockPref', 'user': 'pref', 'clear': 'clearPref'}[preference.Status | default('default')] %}
+{% if function == 'clearPref' %}
+{{ function }}("{{ name }}");
+{% else %}
+{{ function }}("{{ name }}", {{ preference.Value | to_json }});
+{% endif %}
+{% endfor %}

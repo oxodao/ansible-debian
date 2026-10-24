@@ -1,0 +1,23 @@
+---
+- name: 'Install Docker Engine, Compose and Buildx from Debian'
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    state: 'present'
+    name:
+      - 'docker.io'
+      - 'docker-compose'
+      - 'docker-buildx'
+
+- name: 'Allow the desktop user to use Docker'
+  ansible.builtin.user:
+    name: '{{ desktop_user }}'
+    groups: 'docker'
+    append: true
+
+- name: 'Enable Docker at boot'
+  ansible.builtin.systemd_service:
+    name: 'docker.service'
+    enabled: true
+    state: 'started'

@@ -1,0 +1,20 @@
+---
+- name: 'Install the font cache utility'
+  ansible.builtin.apt:
+    name: 'fontconfig'
+    state: 'present'
+    install_recommends: false
+
+- name: 'Create the system Hack Nerd Font directory'
+  ansible.builtin.file:
+    path: '/usr/local/share/fonts/HackNerdFont'
+    state: 'directory'
+    mode: '0755'
+
+- name: 'Install Hack Nerd Font when it is not already present'
+  ansible.builtin.unarchive:
+    src: 'https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Hack.tar.xz'
+    dest: '/usr/local/share/fonts/HackNerdFont'
+    remote_src: true
+    creates: '/usr/local/share/fonts/HackNerdFont/HackNerdFont-Regular.ttf'
+  notify: 'Refresh the font cache'

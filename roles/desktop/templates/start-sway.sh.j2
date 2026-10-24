@@ -1,0 +1,9 @@
+#!/bin/sh
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=sway
+export XDG_SESSION_DESKTOP=sway
+export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/gcr/ssh"
+export PATH="/usr/local/bin:$PATH"
+export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:${HOME}/.local/share/flatpak/exports/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+exec /usr/local/bin/sway --config '/home/{{ desktop_user }}/.config/sway/config'

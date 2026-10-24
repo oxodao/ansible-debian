@@ -1,0 +1,117 @@
+---
+- name: 'Install terminal and shell tools used by the dotfiles'
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    state: 'present'
+    name:
+      - 'acl'
+      - 'alacritty'
+      - 'atool'
+      - 'ca-certificates'
+      - 'curl'
+      - 'dbus-user-session'
+      - 'direnv'
+      - 'eza'
+      - 'fd-find'
+      - 'ffmpeg'
+      - 'fzf'
+      - 'git'
+      - 'git-delta'
+      - 'git-lfs'
+      - 'golang-go'
+      - 'imagemagick'
+      - 'jq'
+      - 'libpam-systemd'
+      - 'lm-sensors'
+      - 'neovim'
+      - 'openssh-client'
+      - 'ripgrep'
+      - 'rsync'
+      - 'tmux'
+      - 'unzip'
+      - 'wget'
+      - 'xclip'
+      - 'xz-utils'
+      - 'yt-dlp'
+      - 'zip'
+      - 'zsh'
+
+- name: 'Install the latest Glow with the Debian Go toolchain'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['go', 'install', 'charm.land/glow/v3@latest']
+  environment:
+    GOPATH: '/home/{{ desktop_user }}/.go'
+    GOBIN: '/home/{{ desktop_user }}/.go/bin'
+    GOCACHE: '/tmp/autodebian-go-build-{{ desktop_user }}'
+    GOMODCACHE: '/tmp/autodebian-go-mod-{{ desktop_user }}'
+  changed_when: true
+
+- name: 'Install OpenCode from its official installer'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+  args:
+    executable: '/bin/bash'
+    creates: '/home/{{ desktop_user }}/.opencode/bin/opencode'
+  environment:
+    HOME: '/home/{{ desktop_user }}'
+
+- name: 'Install metaprint from its latest release'
+  ansible.builtin.import_tasks: 'metaprint.yml'
+  tags: ['metaprint']
+
+- name: 'Install the terminal font required by the dotfiles'
+  ansible.builtin.import_tasks: 'fonts.yml'
+
+- name: 'Fetch Oh My Zsh without executing its installer'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.git:
+    repo: 'https://github.com/ohmyzsh/ohmyzsh.git'
+    dest: '/home/{{ desktop_user }}/.oh-my-zsh'
+    version: 'master'
+    depth: 1
+
+- name: 'Create the Oh My Zsh custom themes directory'
+  ansible.builtin.file:
+    path: '/home/{{ desktop_user }}/.oh-my-zsh/custom/themes'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+
+- name: 'Install the custom mattboll theme after cloning Oh My Zsh'
+  ansible.builtin.copy:
+    src: 'mattboll.zsh-theme'
+    dest: '/home/{{ desktop_user }}/.oh-my-zsh/custom/themes/mattboll.zsh-theme'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0644'
+
+- name: 'Inspect the user Zsh startup file without following symlinks'
+  ansible.builtin.stat:
+    path: '/home/{{ desktop_user }}/.zshrc'
+    follow: false
+  register: 'terminal_zshrc'
+
+- name: 'Link the dotfiles Zsh configuration when no startup file exists'
+  ansible.builtin.file:
+    src: '/opt/dotfiles/zshrc'
+    dest: '/home/{{ desktop_user }}/.zshrc'
+    state: 'link'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    follow: false
+  when: 'not terminal_zshrc.stat.exists and not (terminal_zshrc.stat.islnk | default(false))'
+
+- name: 'Select Zsh as the desktop user login shell'
+  ansible.builtin.user:
+    name: '{{ desktop_user }}'
+    shell: '/usr/bin/zsh'
+
+- name: 'Integrate the keyring and the GCR SSH agent'
+  ansible.builtin.import_tasks: 'keyring.yml'
+  tags: ['keyring']

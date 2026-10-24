@@ -1,0 +1,14 @@
+---
+- name: 'Set the GTK theme to Adwaita-dark'
+  become_user: '{{ desktop_user }}'
+  community.general.dconf:
+    key: '/org/gnome/desktop/interface/gtk-theme'
+    value: '''Adwaita-dark'''
+    state: 'present'
+
+- name: 'Prefer dark mode for libadwaita applications'
+  become_user: '{{ desktop_user }}'
+  community.general.dconf:
+    key: '/org/gnome/desktop/interface/color-scheme'
+    value: '''prefer-dark'''
+    state: 'present'

@@ -1,0 +1,90 @@
+---
+- name: 'Create the user-owned SwayFX source directory'
+  ansible.builtin.file:
+    path: '{{ swayfx_source_directory }}'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+
+- name: 'Fetch the SwayFX release'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.git:
+    repo: 'https://github.com/wlrfx/swayfx.git'
+    dest: '{{ swayfx_source_directory }}'
+    version: '{{ swayfx_version }}'
+    depth: 1
+
+- name: 'Create the dependency source directory'
+  ansible.builtin.file:
+    path: '{{ swayfx_source_directory }}/subprojects'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+
+- name: 'Fetch compatible wlroots and SceneFX releases'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.git:
+    repo: '{{ item.repo }}'
+    dest: '{{ swayfx_source_directory }}/subprojects/{{ item.name }}'
+    version: '{{ item.version }}'
+    depth: 1
+  loop:
+    - name: 'wlroots'
+      repo: 'https://gitlab.freedesktop.org/wlroots/wlroots.git'
+      version: '{{ wlroots_version }}'
+
+    - name: 'scenefx'
+      repo: 'https://github.com/wlrfx/scenefx.git'
+      version: '{{ scenefx_version }}'
+
+- name: 'Configure the SwayFX release build'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv:
+      - 'meson'
+      - 'setup'
+      - 'build'
+      - '--prefix=/usr/local'
+      - '--libdir=lib'
+      - '--buildtype=release'
+      - '-Dwlroots:examples=false'
+      - '-Dwlroots:backends=drm,libinput'
+      - '-Dwlroots:renderers=gles2'
+      - '-Dwlroots:session=enabled'
+      - '-Dwlroots:xwayland=enabled'
+      - '-Dscenefx:examples=false'
+      - '-Dtray=disabled'
+    chdir: '{{ swayfx_source_directory }}'
+    creates: '{{ swayfx_source_directory }}/build/build.ninja'
+
+- name: 'Compile SwayFX without root privileges'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['ninja', '-C', 'build']
+    chdir: '{{ swayfx_source_directory }}'
+  environment:
+    LC_ALL: 'C'
+  register: 'swayfx_compilation'
+  changed_when: '"no work to do" not in swayfx_compilation.stdout'
+
+- name: 'Check whether SwayFX is installed'
+  ansible.builtin.stat:
+    path: '/usr/local/bin/sway'
+  register: 'swayfx_binary'
+
+- name: 'Install the compiled SwayFX release and its libraries'
+  ansible.builtin.command:
+    argv: ['meson', 'install', '-C', 'build', '--no-rebuild']
+    chdir: '{{ swayfx_source_directory }}'
+  when: 'swayfx_compilation.changed or not swayfx_binary.stat.exists'
+  changed_when: true
+  notify: 'Refresh the shared library cache'
+
+- name: 'Make the installed compositor libraries available'
+  ansible.builtin.meta: 'flush_handlers'
+
+- name: 'Check the installed SwayFX binary'
+  ansible.builtin.command: '/usr/local/bin/sway --version'
+  changed_when: false

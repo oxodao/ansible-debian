@@ -1,0 +1,27 @@
+---
+- name: 'Install Plymouth'
+  ansible.builtin.apt:
+    name: ['plymouth', 'plymouth-themes']
+    state: 'present'
+
+- name: 'Enable Plymouth splash in GRUB'
+  ansible.builtin.replace:
+    path: '/etc/default/grub'
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT=")(?![^"]*\bsplash\b)([^"]*)(")$'
+    replace: '\1\2 splash\3'
+  register: 'grub_config'
+
+- name: 'Configure Plymouth spinner theme'
+  ansible.builtin.command:
+    cmd: 'plymouth-set-default-theme spinner'
+  changed_when: true
+
+- name: 'Update GRUB'
+  ansible.builtin.command:
+    cmd: 'update-grub'
+  when: 'grub_config.changed'
+
+- name: 'Rebuild initramfs'
+  ansible.builtin.command:
+    cmd: 'update-initramfs -u -k all'
+  changed_when: true

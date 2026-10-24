@@ -1,0 +1,30 @@
+---
+- name: 'Read enabled foreign package architectures'
+  ansible.builtin.command: 'dpkg --print-foreign-architectures'
+  register: 'games_foreign_architectures'
+  changed_when: false
+
+- name: 'Enable the i386 architecture required by Steam'
+  ansible.builtin.command: 'dpkg --add-architecture i386'
+  when: '"i386" not in games_foreign_architectures.stdout_lines'
+
+- name: 'Install Steam and gaming support'
+  ansible.builtin.apt:
+    update_cache: true
+    install_recommends: false
+    state: 'present'
+    name:
+      - 'gamemode'
+      - 'libgl1-mesa-dri:i386'
+      - 'libglx-mesa0:i386'
+      - 'mangohud'
+      - 'mesa-vulkan-drivers:i386'
+      - 'steam-devices'
+      - 'steam-installer'
+
+- name: 'Install Heroic Launcher'
+  community.general.flatpak:
+    name: 'com.heroicgameslauncher.hgl'
+    remote: 'flathub'
+    method: 'system'
+    state: 'present'

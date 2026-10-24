@@ -1,0 +1,29 @@
+---
+extends: 'default'
+
+rules:
+  document-start: 'disable'
+  line-length: 'disable'
+
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  quoted-strings:
+    quote-type: 'single'
+    required: true
+    check-keys: false
+
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 0
+
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+
+  hyphens:
+    max-spaces-after: 1
+
+  trailing-spaces: 'enable'

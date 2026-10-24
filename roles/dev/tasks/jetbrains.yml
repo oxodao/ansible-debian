@@ -1,0 +1,143 @@
+---
+- name: 'Create the JetBrains installation and download directories'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  loop:
+    - '{{ jetbrains_directory }}'
+    - '{{ jetbrains_download_directory }}'
+
+- name: 'Resolve the latest JetBrains releases'
+  ansible.builtin.uri:
+    url: 'https://data.services.jetbrains.com/products/releases?code={{ item.code }}&latest=true&type=release'
+    return_content: true
+  loop: '{{ jetbrains_products }}'
+  register: 'jetbrains_releases'
+  check_mode: false
+
+- name: 'Fetch the latest JetBrains release checksums'
+  ansible.builtin.uri:
+    url: '{{ item.json[item.item.code][0].downloads.linux.checksumLink }}'
+    return_content: true
+  loop: '{{ jetbrains_releases.results }}'
+  register: 'jetbrains_checksums'
+  check_mode: false
+
+- name: 'Check whether the latest JetBrains versions are installed'
+  ansible.builtin.stat:
+    path: '{{ jetbrains_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}/product-info.json'
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    label: '{{ item.item.display_name }}'
+  register: 'jetbrains_installed'
+
+- name: 'Download missing JetBrains releases'
+  ansible.builtin.get_url:
+    url: '{{ item.json[item.item.code][0].downloads.linux.link }}'
+    dest: '{{ jetbrains_download_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}.tar.gz'
+    checksum: 'sha256:{{ jetbrains_checksums.results[jetbrains_index].content.split()[0] }}'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    index_var: 'jetbrains_index'
+    label: '{{ item.item.display_name }}'
+  when: 'not jetbrains_installed.results[jetbrains_index].stat.exists'
+
+- name: 'Create missing JetBrains version directories'
+  ansible.builtin.file:
+    path: '{{ jetbrains_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    index_var: 'jetbrains_index'
+    label: '{{ item.item.display_name }}'
+  when: 'not jetbrains_installed.results[jetbrains_index].stat.exists'
+
+- name: 'Extract missing JetBrains releases'
+  ansible.builtin.unarchive:
+    src: '{{ jetbrains_download_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}.tar.gz'
+    dest: '{{ jetbrains_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}'
+    remote_src: true
+    extra_opts: ['--strip-components=1']
+    creates: '{{ jetbrains_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}/product-info.json'
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    index_var: 'jetbrains_index'
+    label: '{{ item.item.display_name }}'
+  when: 'not jetbrains_installed.results[jetbrains_index].stat.exists'
+
+- name: 'Remove downloaded JetBrains archives after extraction'
+  ansible.builtin.file:
+    path: '{{ jetbrains_download_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}.tar.gz'
+    state: 'absent'
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    index_var: 'jetbrains_index'
+    label: '{{ item.item.display_name }}'
+  when: 'not jetbrains_installed.results[jetbrains_index].stat.exists'
+
+- name: 'Expose the current JetBrains versions under /opt'
+  ansible.builtin.file:
+    src: '{{ jetbrains_directory }}/{{ item.item.name }}-{{ item.json[item.item.code][0].version }}'
+    dest: '/opt/{{ item.item.name }}'
+    state: 'link'
+    force: true
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    label: '{{ item.item.display_name }}'
+
+- name: 'Find obsolete JetBrains versions'
+  ansible.builtin.find:
+    paths: '{{ jetbrains_directory }}'
+    file_type: 'directory'
+    patterns: '{{ item.item.name }}-*'
+    excludes: '{{ item.item.name }}-{{ item.json[item.item.code][0].version }}'
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    label: '{{ item.item.display_name }}'
+  register: 'jetbrains_obsolete'
+
+- name: 'Remove obsolete JetBrains versions'
+  ansible.builtin.file:
+    path: '{{ item.path }}'
+    state: 'absent'
+  loop: '{{ jetbrains_obsolete.results | map(attribute="files") | flatten }}'
+
+- name: 'Create the JetBrains command symlinks'
+  ansible.builtin.file:
+    src: '/opt/{{ item.item.name }}/bin/{{ item.item.script }}'
+    dest: '/usr/bin/{{ item.item.command }}'
+    state: 'link'
+    force: true
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    label: '{{ item.item.display_name }}'
+
+- name: 'Create the JetBrains desktop launchers'
+  ansible.builtin.copy:
+    dest: '/usr/share/applications/jetbrains-{{ item.item.name }}.desktop'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name={{ item.item.display_name }}
+      Comment={{ item.item.display_name }}
+      Exec=/opt/{{ item.item.name }}/bin/{{ item.item.script }} %f
+      Icon=/opt/{{ item.item.name }}/bin/{{ item.item.icon }}
+      Terminal=false
+      StartupNotify=true
+      Categories=Development;IDE;
+  loop: '{{ jetbrains_releases.results }}'
+  loop_control:
+    label: '{{ item.item.display_name }}'

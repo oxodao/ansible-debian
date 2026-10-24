@@ -1,0 +1,27 @@
+---
+- name: 'Resolve the latest published metaprint release'
+  ansible.builtin.uri:
+    url: 'https://api.github.com/repos/oxodao/metaprint/releases/latest'
+    return_content: true
+    headers:
+      Accept: 'application/vnd.github+json'
+  register: 'metaprint_release'
+  check_mode: false
+
+- name: 'Select the Linux binary for this architecture'
+  ansible.builtin.set_fact:
+    metaprint_assets: '{{ metaprint_release.json.assets | selectattr("name", "match", "^metaprint-.*-linux-" ~ ansible_facts.architecture ~ "$") | list }}'
+
+- name: 'Require a published binary for this architecture'
+  ansible.builtin.assert:
+    that: 'metaprint_assets | length == 1'
+    fail_msg: 'Aucun binaire metaprint Linux unique pour {{ ansible_facts.architecture }} dans la release {{ metaprint_release.json.tag_name }}.'
+
+- name: 'Install metaprint from the GitHub release'
+  ansible.builtin.get_url:
+    url: '{{ metaprint_assets[0].browser_download_url }}'
+    checksum: '{{ metaprint_assets[0].digest | default(omit, true) }}'
+    dest: '/usr/local/bin/metaprint'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'

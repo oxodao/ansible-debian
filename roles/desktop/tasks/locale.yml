@@ -1,0 +1,15 @@
+---
+- name: 'Generate the French UTF-8 locale'
+  community.general.locale_gen:
+    name: 'fr_FR.UTF-8'
+    state: 'present'
+
+- name: 'Select French as the default system locale'
+  ansible.builtin.copy:
+    dest: '/etc/default/locale'
+    content: |
+      LANG=fr_FR.UTF-8
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    backup: true

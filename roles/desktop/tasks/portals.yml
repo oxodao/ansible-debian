@@ -1,0 +1,21 @@
+---
+- name: 'Create the system XDG desktop portal configuration directory'
+  ansible.builtin.file:
+    path: '/etc/xdg-desktop-portal'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+
+- name: 'Select the Wayland portal backends for Sway'
+  ansible.builtin.copy:
+    dest: '/etc/xdg-desktop-portal/sway-portals.conf'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    content: |
+      [preferred]
+      default=gtk
+      org.freedesktop.impl.portal.ScreenCast=wlr
+      org.freedesktop.impl.portal.Screenshot=wlr
+      org.freedesktop.impl.portal.Secret=gnome-keyring

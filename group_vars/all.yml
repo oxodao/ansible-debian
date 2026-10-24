@@ -1,0 +1,6 @@
+# L'installation en unstable est volontaire et risquée.
+sid_components: 'main contrib non-free non-free-firmware'
+
+# Uniquement les applications Flatpak système, pas APT ni VS Code.
+flatpak_auto_update: true
+flatpak_update_calendar: 'daily'

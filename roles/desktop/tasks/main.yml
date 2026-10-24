@@ -1,0 +1,38 @@
+---
+- name: 'Install the minimal desktop and build dependencies'
+  ansible.builtin.import_tasks: 'packages.yml'
+
+- name: 'Install the Oxlabs root CA'
+  ansible.builtin.import_tasks: 'root_ca.yml'
+  tags: ['root_ca']
+
+- name: 'Configure the system locale'
+  ansible.builtin.import_tasks: 'locale.yml'
+
+- name: 'Configure the GTK dark theme'
+  ansible.builtin.import_tasks: 'gtk.yml'
+
+- name: 'Configure the Wayland portals'
+  ansible.builtin.import_tasks: 'portals.yml'
+  tags: ['portals']
+
+- name: 'Configure Chromium and Google Chrome'
+  ansible.builtin.import_tasks: 'browsers.yml'
+  tags: ['browsers', 'chrome']
+
+- name: 'Plymouth'
+  ansible.builtin.import_tasks: 'plymouth.yml'
+
+- name: 'Install terminal tools and the SSH agent'
+  ansible.builtin.import_tasks: 'terminal.yml'
+  tags: ['terminal']
+
+- name: 'Install Rofi and its calculator and emoji plugins'
+  ansible.builtin.import_tasks: 'rofi.yml'
+  tags: ['rofi']
+
+- name: 'Build and install SwayFX'
+  ansible.builtin.import_tasks: 'swayfx.yml'
+
+- name: 'Configure the initial SwayFX session and autologin'
+  ansible.builtin.import_tasks: 'session.yml'

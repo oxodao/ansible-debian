@@ -1,0 +1,37 @@
+---
+- name: 'Check whether NVM is installed'
+  ansible.builtin.stat:
+    path: '{{ nvm_directory }}/nvm.sh'
+  register: 'nvm_init'
+
+- name: 'Download the NVM installer'
+  ansible.builtin.get_url:
+    url: 'https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh'
+    dest: '/tmp/autodebian-nvm-install.sh'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  when: 'not nvm_init.stat.exists'
+
+- name: 'Install NVM without modifying the user shell configuration'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/bin/bash', '/tmp/autodebian-nvm-install.sh']
+  environment:
+    NVM_DIR: '{{ nvm_directory }}'
+    PROFILE: '/dev/null'
+  when: 'not nvm_init.stat.exists'
+
+- name: 'Remove the temporary NVM installer'
+  ansible.builtin.file:
+    path: '/tmp/autodebian-nvm-install.sh'
+    state: 'absent'
+
+- name: 'Verify the NVM installation'
+  ansible.builtin.stat:
+    path: '{{ nvm_directory }}/nvm.sh'
+  register: 'nvm_installed'
+
+- name: 'Require NVM after installation'
+  ansible.builtin.assert:
+    that: 'nvm_installed.stat.exists'

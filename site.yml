@@ -1,0 +1,26 @@
+---
+- name: 'Configure the desktop and applications'
+  hosts: 'desktops'
+  become: true
+
+  pre_tasks:
+    - name: 'Require Debian'
+      ansible.builtin.assert:
+        that: 'ansible_facts.distribution == ''Debian'''
+      tags: ['always']
+
+  roles:
+    - role: 'dotfiles'
+      tags: ['dotfiles', 'desktop', 'terminal']
+
+    - role: 'desktop'
+      tags: ['desktop']
+
+    - role: 'firefox'
+      tags: ['firefox']
+    - role: 'dev'
+      tags: ['dev']
+    - role: 'games'
+      tags: ['games']
+    - role: 'flatpak'
+      tags: ['flatpak']

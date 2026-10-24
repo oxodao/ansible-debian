@@ -1,0 +1,9 @@
+*.retry
+.ansible/
+.cache/
+.venv/
+*.log
+__pycache__/
+*.pyc
+host_vars/*.yml
+!host_vars/*.dist.yml

@@ -1,0 +1,131 @@
+---
+- name: 'Install the Secret Service keyring and its SSH integration'
+  ansible.builtin.apt:
+    state: 'present'
+    install_recommends: false
+    name:
+      - 'gcr4'
+      - 'gnome-keyring'
+      - 'libpam-gnome-keyring'
+      - 'libsecret-1-0'
+      - 'python3-dbus'
+      - 'seahorse'
+
+- name: 'Create the private user keyring directory'
+  ansible.builtin.file:
+    path: '/home/{{ desktop_user }}/.local/share/keyrings'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0700'
+
+- name: 'Initialize an empty-password login keyring without replacing existing secrets'
+  ansible.builtin.copy:
+    dest: '/home/{{ desktop_user }}/.local/share/keyrings/login.keyring'
+    content: |
+      [keyring]
+      display-name=Login
+      ctime={{ ansible_date_time.epoch }}
+      mtime={{ ansible_date_time.epoch }}
+      lock-on-idle=false
+      lock-after=false
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0600'
+    force: false
+
+- name: 'Select login as the default keyring unless a default already exists'
+  ansible.builtin.copy:
+    dest: '/home/{{ desktop_user }}/.local/share/keyrings/default'
+    content: 'login'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0600'
+    force: false
+
+- name: 'Enable the packaged user keyring and SSH agent units for logins'
+  ansible.builtin.systemd_service:
+    name: '{{ item }}'
+    scope: 'global'
+    enabled: true
+  loop:
+    - 'gnome-keyring-daemon.service'
+    - 'gcr-ssh-agent.socket'
+
+- name: 'Locate the desktop user manager bus'
+  ansible.builtin.stat:
+    path: '/run/user/{{ desktop_uid }}/bus'
+  register: 'keyring_user_bus'
+
+- name: 'Configure the running user manager when available'
+  when: 'keyring_user_bus.stat.exists'
+  become_user: '{{ desktop_user }}'
+  environment:
+    XDG_RUNTIME_DIR: '/run/user/{{ desktop_uid }}'
+    DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/{{ desktop_uid }}/bus'
+  block:
+    - name: 'Reload user units after the package and dotfiles changes'
+      ansible.builtin.systemd_service:
+        scope: 'user'
+        daemon_reload: true
+
+    - name: 'Read the legacy OpenSSH agent unit state'
+      ansible.builtin.command: 'systemctl --user show ssh-agent.service --property=LoadState --value'
+      register: 'keyring_legacy_agent'
+      changed_when: false
+
+    - name: 'Stop the legacy OpenSSH agent if still installed'
+      ansible.builtin.systemd_service:
+        name: 'ssh-agent.service'
+        scope: 'user'
+        state: 'stopped'
+      when: 'keyring_legacy_agent.stdout == "loaded"'
+
+    - name: 'Start the packaged keyring and GCR socket for this session'
+      ansible.builtin.systemd_service:
+        name: '{{ item }}'
+        scope: 'user'
+        state: 'started'
+      loop:
+        - 'gnome-keyring-daemon.socket'
+        - 'gnome-keyring-daemon.service'
+        - 'gcr-ssh-agent.socket'
+
+- name: 'Require the desktop user session bus for keyring password management'
+  ansible.builtin.assert:
+    that: 'keyring_user_bus.stat.exists'
+    fail_msg: 'Ouvrir une session SSH avec {{ desktop_user }} avant de configurer son trousseau.'
+
+- name: 'Check whether the default keyring already accepts an empty password'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/usr/bin/python3', '-c', '{{ lookup("ansible.builtin.file", role_path ~ "/files/keyring_password.py") }}', 'probe']
+  environment:
+    XDG_RUNTIME_DIR: '/run/user/{{ desktop_uid }}'
+    DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/{{ desktop_uid }}/bus'
+  register: 'keyring_password_probe'
+  changed_when: false
+  no_log: true
+
+- name: 'Ask privately for the old password of protected keyrings'
+  ansible.builtin.pause:
+    prompt: 'Ancien mot de passe du trousseau de {{ item }} (conservé uniquement en mémoire)'
+    echo: false
+  loop: '{{ ansible_play_hosts }}'
+  when: '(hostvars[item].keyring_password_probe.stdout | from_json).needs_password'
+  run_once: true
+  register: 'keyring_password_answers'
+  no_log: true
+
+- name: 'Set the existing keyring password to empty while preserving its secrets'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/usr/bin/python3', '-c', '{{ lookup("ansible.builtin.file", role_path ~ "/files/keyring_password.py") }}', 'change']
+    stdin: '{{ (keyring_password_answers.results | selectattr("item", "equalto", inventory_hostname) | first).user_input }}'
+    stdin_add_newline: false
+  environment:
+    XDG_RUNTIME_DIR: '/run/user/{{ desktop_uid }}'
+    DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/{{ desktop_uid }}/bus'
+  when: '(keyring_password_probe.stdout | from_json).needs_password'
+  changed_when: true
+  no_log: true

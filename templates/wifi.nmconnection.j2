@@ -1,0 +1,22 @@
+[connection]
+id=autodebian-wifi
+uuid={{ ('autodebian:' ~ inventory_hostname ~ ':wifi') | to_uuid }}
+type=wifi
+interface-name={{ network_wifi.interface }}
+autoconnect=true
+
+[wifi]
+mode=infrastructure
+ssid={{ network_wifi.ssid | replace('\\', '\\\\') }}
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk={{ network_wifi.password | replace('\\', '\\\\') }}
+
+[ipv4]
+method=auto
+route-metric=600
+
+[ipv6]
+method=auto
+route-metric=600

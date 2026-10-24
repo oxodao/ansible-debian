@@ -1,0 +1,11 @@
+---
+desktop_user: 'oxodao'
+desktop_uid: 1000
+desktop_gid: 1000
+
+# Wi-Fi facultatif
+# Nom de l'interface : `ip -br link` sur la machine cible (ex. wlp2s0).
+network_wifi:
+  interface: 'wlp1s0'
+  ssid: ''
+  password: ''

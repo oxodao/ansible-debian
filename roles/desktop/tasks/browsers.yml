@@ -1,0 +1,89 @@
+---
+- name: 'Require the Oxlabs root CA for Chromium and Chrome'
+  ansible.builtin.stat:
+    path: '/usr/local/share/ca-certificates/oxlabs-root.crt'
+  register: 'browsers_root_ca'
+
+- name: 'Fail when the Oxlabs root CA is missing'
+  ansible.builtin.assert:
+    that: 'browsers_root_ca.stat.exists'
+    fail_msg: 'Déployer la tâche root_ca avant la configuration des navigateurs.'
+
+- name: 'Create the user NSS database directory'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0700'
+  loop:
+    - '/home/{{ desktop_user }}/.pki'
+    - '/home/{{ desktop_user }}/.pki/nssdb'
+
+- name: 'Initialize the shared Chromium and Chrome NSS database'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv:
+      - 'certutil'
+      - '-N'
+      - '--empty-password'
+      - '-d'
+      - 'sql:/home/{{ desktop_user }}/.pki/nssdb'
+  args:
+    creates: '/home/{{ desktop_user }}/.pki/nssdb/cert9.db'
+
+- name: 'Check whether the Oxlabs root CA is already trusted by Chromium'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv:
+      - 'certutil'
+      - '-L'
+      - '-d'
+      - 'sql:/home/{{ desktop_user }}/.pki/nssdb'
+      - '-n'
+      - 'Oxlabs Root CA'
+  register: 'browsers_nss_certificate'
+  changed_when: false
+  failed_when: false
+
+- name: 'Import the Oxlabs root CA into the Chromium and Chrome NSS database'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv:
+      - 'certutil'
+      - '-A'
+      - '-d'
+      - 'sql:/home/{{ desktop_user }}/.pki/nssdb'
+      - '-t'
+      - 'C,,'
+      - '-n'
+      - 'Oxlabs Root CA'
+      - '-i'
+      - '/usr/local/share/ca-certificates/oxlabs-root.crt'
+  when: 'browsers_nss_certificate.rc != 0'
+
+- name: 'Require the x86_64 architecture for Google Chrome'
+  ansible.builtin.assert:
+    that: 'ansible_facts.architecture == "x86_64"'
+    fail_msg: 'Google Chrome pour Linux n’est disponible que pour x86_64.'
+
+- name: 'Configure the official Google Chrome APT repository'
+  ansible.builtin.deb822_repository:
+    name: 'google-chrome'
+    types: ['deb']
+    uris: '{{ google_chrome_apt_uri }}'
+    suites: ['stable']
+    components: ['main']
+    architectures: ['amd64']
+    signed_by: '{{ google_chrome_apt_key_url }}'
+    enabled: true
+    state: 'present'
+    install_python_debian: true
+
+- name: 'Install Google Chrome from the official repository'
+  ansible.builtin.apt:
+    name: 'google-chrome-stable'
+    state: 'present'
+    update_cache: true
+
+# Ne pas modifier les associations MIME : Firefox reste le navigateur par défaut.

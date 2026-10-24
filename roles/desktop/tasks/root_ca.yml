@@ -1,0 +1,17 @@
+---
+- name: 'Install the CA certificates tooling'
+  ansible.builtin.apt:
+    name: 'ca-certificates'
+    state: 'present'
+    install_recommends: false
+
+- name: 'Download the Oxlabs root certificate on first installation'
+  ansible.builtin.get_url:
+    url: 'https://ca.lan/root.crt'
+    dest: '/usr/local/share/ca-certificates/oxlabs-root.crt'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    force: false
+    validate_certs: false
+  notify: 'Update CA certificates'

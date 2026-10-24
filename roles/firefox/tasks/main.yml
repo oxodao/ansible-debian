@@ -1,0 +1,80 @@
+---
+# TODO: lorsque le rôle Firefox sera finalisé, ajouter le certificat racine
+# Oxlabs au magasin de confiance de Firefox, en complément de la tâche root_ca.
+- name: 'Create the user configuration directory when running this role alone'
+  ansible.builtin.file:
+    path: '/home/{{ desktop_user }}/.config'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+
+- name: 'Install Firefox stable release and its French language pack, not ESR'
+  ansible.builtin.apt:
+    name: ['firefox', 'firefox-l10n-fr']
+    state: 'present'
+
+- name: 'Remove the old ESR packages without deleting the user''s browser data'
+  ansible.builtin.apt:
+    name: ['firefox-esr', 'firefox-esr-l10n-fr']
+    state: 'absent'
+    purge: false
+    autoremove: false
+
+- name: 'Check the Oxlabs root CA before configuring Firefox'
+  ansible.builtin.stat:
+    path: '/usr/local/share/ca-certificates/oxlabs-root.crt'
+  register: 'firefox_root_ca'
+
+- name: 'Require the Oxlabs root CA for Firefox'
+  ansible.builtin.assert:
+    that: 'firefox_root_ca.stat.exists'
+    fail_msg: 'Déployer la tâche root_ca avant le rôle Firefox.'
+
+- name: 'Create the Firefox policy and AutoConfig directories'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: 'directory'
+    mode: '0755'
+  loop:
+    - '/etc/firefox/policies'
+    - '/etc/firefox/defaults/pref'
+
+- name: 'Configure Firefox policies and supported preferences'
+  ansible.builtin.copy:
+    dest: '/etc/firefox/policies/policies.json'
+    content: '{{ {"policies": firefox_policies | combine({"Preferences": firefox_preferences, "ExtensionSettings": firefox_extensions})} | to_nice_json }}'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    backup: true
+
+- name: 'Configure the Firefox AutoConfig entrypoint'
+  ansible.builtin.template:
+    src: 'autoconfig.js.j2'
+    dest: '/etc/firefox/defaults/pref/autoconfig.js'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    backup: true
+
+- name: 'Apply Firefox preferences unsupported by enterprise policies'
+  ansible.builtin.template:
+    src: 'firefox.cfg.j2'
+    dest: '/etc/firefox/firefox.cfg'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    backup: true
+
+- name: 'Set Firefox as the default web browser for this user'
+  community.general.ini_file:
+    path: '/home/{{ desktop_user }}/.config/mimeapps.list'
+    section: 'Default Applications'
+    option: '{{ item }}'
+    value: 'firefox.desktop'
+    no_extra_spaces: true
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0644'
+  loop: ['text/html', 'x-scheme-handler/http', 'x-scheme-handler/https']

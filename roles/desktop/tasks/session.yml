@@ -1,0 +1,47 @@
+---
+- name: 'Remove the previous system fallback configuration'
+  ansible.builtin.file:
+    path: '/usr/local/etc/sway/config'
+    state: 'absent'
+
+- name: 'Create the XDG user directories declared by the dotfiles'
+  ansible.builtin.file:
+    path: '/home/{{ desktop_user }}/{{ item }}'
+    state: 'directory'
+    owner: '{{ desktop_user }}'
+    group: '{{ desktop_gid }}'
+    mode: '0755'
+  loop:
+    - 'Bureau'
+    - 'Documents'
+    - 'Images'
+    - 'Téléchargements'
+
+- name: 'Install the SwayFX session launcher'
+  ansible.builtin.template:
+    src: 'start-sway.sh.j2'
+    dest: '/usr/local/bin/start-sway'
+    mode: '0755'
+
+- name: 'Configure greetd autologin on VT7'
+  ansible.builtin.template:
+    src: 'greetd.toml.j2'
+    dest: '/etc/greetd/config.toml'
+    mode: '0644'
+    backup: true
+
+- name: 'Enable greetd without interrupting a current graphical session'
+  ansible.builtin.systemd_service:
+    name: 'greetd.service'
+    enabled: true
+
+- name: 'Read the current default boot target'
+  ansible.builtin.command: 'systemctl get-default'
+  register: 'desktop_default_target'
+  changed_when: false
+  check_mode: false
+
+- name: 'Select graphical boot'
+  ansible.builtin.command: 'systemctl set-default graphical.target'
+  when: 'desktop_default_target.stdout != "graphical.target"'
+  changed_when: true

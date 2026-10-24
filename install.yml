@@ -1,0 +1,124 @@
+---
+- name: 'Install the Debian Sid base system and DHCP networking'
+  hosts: 'desktops'
+  become: true
+  become_method: 'su'
+
+  pre_tasks:
+    - name: 'Check whether the initial installation already completed'
+      ansible.builtin.stat:
+        path: '/etc/.installed_at'
+      register: 'initial_installation'
+
+    - name: 'Refuse to repeat a completed initial installation'
+      ansible.builtin.assert:
+        that: 'not initial_installation.stat.exists'
+        fail_msg: 'Installation initiale déjà effectuée. Utiliser site.yml pour configurer le bureau.'
+
+  tasks:
+    - name: 'Require Debian'
+      ansible.builtin.assert:
+        that: 'ansible_facts.distribution == "Debian"'
+
+    - name: 'Install sudo for subsequent desktop configuration runs'
+      ansible.builtin.apt:
+        name: 'sudo'
+        state: 'present'
+        update_cache: true
+        cache_valid_time: 3600
+        install_recommends: false
+
+    - name: 'Allow the desktop account to use sudo with its password'
+      ansible.builtin.user:
+        name: '{{ desktop_user }}'
+        groups: 'sudo'
+        append: true
+
+    - name: 'Refresh the SSH session to apply the new group membership'
+      ansible.builtin.meta: 'reset_connection'
+
+    - name: 'Configure Sid (Deb822)'
+      ansible.builtin.copy:
+        dest: '/etc/apt/sources.list.d/debian.sources'
+        content: |
+          Types: deb
+          URIs: http://deb.debian.org/debian
+          Suites: sid
+          Components: {{ sid_components }}
+          Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+        mode: '0644'
+        backup: true
+
+    - name: 'Disable traditional source list'
+      ansible.builtin.copy:
+        dest: '/etc/apt/sources.list'
+        content: |
+          # Sources managed in /etc/apt/sources.list.d/debian.sources
+        mode: '0644'
+        backup: true
+
+    - name: 'Upgrade completely to Sid'
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: 'dist'
+        autoremove: false
+
+    - name: 'Install NetworkManager and trusted CA certificates'
+      ansible.builtin.apt:
+        name: ['network-manager', 'ca-certificates']
+        state: 'present'
+        install_recommends: false
+
+    - name: 'Install Wi-Fi authentication support'
+      ansible.builtin.apt:
+        name: 'wpasupplicant'
+        state: 'present'
+        install_recommends: false
+
+    - name: 'Enable NetworkManager without restarting the live network'
+      ansible.builtin.systemd_service:
+        name: 'NetworkManager.service'
+        enabled: true
+
+    - name: 'Configure the optional Wi-Fi fallback'
+      when: 'network_wifi is defined'
+      block:
+        - name: 'Create the NetworkManager profile directory'
+          ansible.builtin.file:
+            path: '/etc/NetworkManager/system-connections'
+            state: 'directory'
+            mode: '0700'
+
+        - name: 'Prepare the DHCP Wi-Fi fallback without activating it'
+          ansible.builtin.template:
+            src: 'wifi.nmconnection.j2'
+            dest: '/etc/NetworkManager/system-connections/autodebian-wifi.nmconnection'
+            owner: 'root'
+            group: 'root'
+            mode: '0600'
+          no_log: true
+
+  post_tasks:
+    - name: 'Record the successful initial installation time in UTC'
+      ansible.builtin.copy:
+        dest: '/etc/.installed_at'
+        content: '{{ now(utc=true, fmt=''%Y-%m-%dT%H:%M:%SZ'') }}'
+        owner: 'root'
+        group: 'root'
+        mode: '0644'
+
+    - name: 'Leave only loopback in ifupdown before rebooting into NetworkManager'
+      ansible.builtin.copy:
+        dest: '/etc/network/interfaces'
+        content: |
+          # NetworkManager manages all other interfaces.
+          auto lo
+          iface lo inet loopback
+        owner: 'root'
+        group: 'root'
+        mode: '0644'
+
+    - name: 'Reboot into the upgraded system and wait for SSH'
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        post_reboot_delay: 10

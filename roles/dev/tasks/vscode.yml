@@ -1,0 +1,126 @@
+---
+- name: 'Create the VS Code installation and download directories'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  loop:
+    - '{{ vscode_directory }}'
+    - '{{ vscode_download_directory }}'
+
+- name: 'Require a supported architecture for VS Code'
+  ansible.builtin.assert:
+    that: 'ansible_facts.architecture in vscode_architectures'
+    fail_msg: 'Architecture non prise en charge par VS Code : {{ ansible_facts.architecture }}.'
+
+- name: 'Resolve the latest stable VS Code release'
+  ansible.builtin.uri:
+    url: 'https://update.code.visualstudio.com/api/update/linux-{{ vscode_architectures[ansible_facts.architecture] }}/stable/latest'
+    return_content: true
+  register: 'vscode_release'
+  check_mode: false
+
+- name: 'Check whether the latest VS Code version is installed'
+  ansible.builtin.stat:
+    path: '{{ vscode_directory }}/{{ vscode_release.json.productVersion }}/bin/code'
+  register: 'vscode_installed'
+
+- name: 'Download the missing VS Code release'
+  ansible.builtin.get_url:
+    url: '{{ vscode_release.json.url }}'
+    dest: '{{ vscode_download_directory }}/code-{{ vscode_release.json.productVersion }}.tar.gz'
+    checksum: 'sha256:{{ vscode_release.json.sha256hash }}'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+  when: 'not vscode_installed.stat.exists'
+
+- name: 'Create the missing VS Code version directory'
+  ansible.builtin.file:
+    path: '{{ vscode_directory }}/{{ vscode_release.json.productVersion }}'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  when: 'not vscode_installed.stat.exists'
+
+- name: 'Extract the missing VS Code release'
+  ansible.builtin.unarchive:
+    src: '{{ vscode_download_directory }}/code-{{ vscode_release.json.productVersion }}.tar.gz'
+    dest: '{{ vscode_directory }}/{{ vscode_release.json.productVersion }}'
+    remote_src: true
+    extra_opts: ['--strip-components=1']
+    creates: '{{ vscode_directory }}/{{ vscode_release.json.productVersion }}/bin/code'
+  when: 'not vscode_installed.stat.exists'
+
+- name: 'Remove the VS Code archive after extraction'
+  ansible.builtin.file:
+    path: '{{ vscode_download_directory }}/code-{{ vscode_release.json.productVersion }}.tar.gz'
+    state: 'absent'
+  when: 'not vscode_installed.stat.exists'
+
+- name: 'Inspect the stable /opt/code path'
+  ansible.builtin.stat:
+    path: '/opt/code'
+    follow: false
+  register: 'vscode_stable_path'
+
+- name: 'Replace the old unversioned VS Code directory'
+  ansible.builtin.file:
+    path: '/opt/code'
+    state: 'absent'
+  when:
+    - 'vscode_stable_path.stat.exists'
+    - 'not (vscode_stable_path.stat.islnk | default(false))'
+
+- name: 'Expose the current VS Code version under /opt/code'
+  ansible.builtin.file:
+    src: '{{ vscode_directory }}/{{ vscode_release.json.productVersion }}'
+    dest: '/opt/code'
+    state: 'link'
+    force: true
+
+- name: 'Find obsolete VS Code versions'
+  ansible.builtin.find:
+    paths: '{{ vscode_directory }}'
+    file_type: 'directory'
+    patterns: '*'
+    excludes: '{{ vscode_release.json.productVersion }}'
+  register: 'vscode_obsolete'
+
+- name: 'Remove obsolete VS Code versions'
+  ansible.builtin.file:
+    path: '{{ item.path }}'
+    state: 'absent'
+  loop: '{{ vscode_obsolete.files }}'
+
+- name: 'Create the /usr/bin/code symlink'
+  ansible.builtin.file:
+    src: '/opt/code/bin/code'
+    dest: '/usr/bin/code'
+    state: 'link'
+    force: true
+
+- name: 'Create the VS Code launcher'
+  ansible.builtin.copy:
+    dest: '/usr/share/applications/code.desktop'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Visual Studio Code
+      GenericName=Text Editor
+      Comment=Code Editing
+      Exec=/opt/code/bin/code %F
+      TryExec=/opt/code/bin/code
+      Icon=/opt/code/resources/app/resources/linux/code.png
+      Terminal=false
+      StartupNotify=true
+      StartupWMClass=Code
+      Categories=Development;IDE;TextEditor;
+      MimeType=application/x-code-workspace;

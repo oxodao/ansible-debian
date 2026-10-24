@@ -1,0 +1,116 @@
+---
+- name: 'Install flatpak'
+  ansible.builtin.apt:
+    name: 'flatpak'
+    state: 'present'
+  tags: ['dev']
+
+- name: 'Configure system flathub remote'
+  community.general.flatpak_remote:
+    name: 'flathub'
+    flatpakrepo_url: 'https://flathub.org/repo/flathub.flatpakrepo'
+    method: 'system'
+    state: 'present'
+  tags: ['dev']
+
+- name: 'Install apps via system Flatpak'
+  community.general.flatpak:
+    name: '{{ item }}'
+    remote: 'flathub'
+    method: 'system'
+    state: 'present'
+  loop:
+    - 'com.bitwarden.desktop'
+    - 'com.obsproject.Studio'
+    - 'com.obsproject.Studio.Plugin.DroidCam'
+    - 'com.orama_interactive.Pixelorama'
+    - 'com.spotify.Client'
+    - 'dev.vencord.Vesktop'
+
+- name: 'Check whether Creality Print is installed'
+  ansible.builtin.command:
+    argv: ['flatpak', 'list', '--app', '--columns=application']
+  register: 'crealityprint_installed'
+  changed_when: false
+
+- name: 'Resolve the latest Creality Print release'
+  ansible.builtin.uri:
+    url: 'https://api.github.com/repos/CrealityOfficial/CrealityPrint/releases/latest'
+    return_content: true
+  register: 'crealityprint_release'
+  when: '"io.github.crealityofficial.CrealityPrint" not in crealityprint_installed.stdout_lines'
+  check_mode: false
+
+- name: 'Require a supported architecture for Creality Print'
+  ansible.builtin.assert:
+    that: 'ansible_facts.architecture in crealityprint_asset_patterns'
+    fail_msg: 'Architecture non prise en charge par Creality Print : {{ ansible_facts.architecture }}.'
+  when: '"io.github.crealityofficial.CrealityPrint" not in crealityprint_installed.stdout_lines'
+
+- name: 'Select the Creality Print Flatpak bundle'
+  ansible.builtin.set_fact:
+    crealityprint_asset: '{{ crealityprint_release.json.assets | selectattr("name", "match", crealityprint_asset_patterns[ansible_facts.architecture]) | first }}'
+  when: '"io.github.crealityofficial.CrealityPrint" not in crealityprint_installed.stdout_lines'
+
+- name: 'Download the Creality Print Flatpak bundle'
+  ansible.builtin.get_url:
+    url: '{{ crealityprint_asset.browser_download_url }}'
+    dest: '/tmp/crealityprint.flatpak'
+    checksum: '{{ crealityprint_asset.digest }}'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+  when: '"io.github.crealityofficial.CrealityPrint" not in crealityprint_installed.stdout_lines'
+
+- name: 'Install Creality Print from its official Flatpak bundle'
+  ansible.builtin.command:
+    argv: ['flatpak', 'install', '--system', '--noninteractive', '-y', '/tmp/crealityprint.flatpak']
+  when: '"io.github.crealityofficial.CrealityPrint" not in crealityprint_installed.stdout_lines'
+  changed_when: true
+
+- name: 'Remove the Creality Print Flatpak bundle'
+  ansible.builtin.file:
+    path: '/tmp/crealityprint.flatpak'
+    state: 'absent'
+
+- name: 'Install Bruno for development'
+  community.general.flatpak:
+    name: 'com.usebruno.Bruno'
+    remote: 'flathub'
+    method: 'system'
+    state: 'present'
+  tags: ['bruno', 'dev']
+
+- name: 'Install auto-update service and timer'
+  ansible.builtin.copy:
+    dest: '/etc/systemd/system/{{ item.name }}'
+    content: '{{ item.content }}'
+    mode: '0644'
+  loop:
+    - name: 'flatpak-update.service'
+      content: |
+        [Unit]
+        Description=Update Flatpak system applications
+        Wants=network-online.target
+        After=network-online.target
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/flatpak update --system --noninteractive -y
+
+    - name: 'flatpak-update.timer'
+      content: |
+        [Unit]
+        Description=Daily Flatpak system update
+        [Timer]
+        OnCalendar={{ flatpak_update_calendar }}
+        Persistent=true
+        RandomizedDelaySec=1h
+        [Install]
+        WantedBy=timers.target
+
+- name: 'Enable flatpak daily update timer'
+  ansible.builtin.systemd:
+    name: 'flatpak-update.timer'
+    enabled: '{{ flatpak_auto_update | bool }}'
+    state: '{{ "started" if flatpak_auto_update | bool else "stopped" }}'
+    daemon_reload: true
