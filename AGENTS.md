@@ -125,7 +125,11 @@ possible ; distinguer les changements réellement nécessaires des vérification
   `/usr/libexec/polkit-mate-authentication-agent-1`. L'ancien agent GNOME n'est plus
   fourni par Sid. L'utilisateur adapte ses dotfiles pour lancer l'agent MATE.
 - Utiliser GCR (`gcr4`) avec GNOME Keyring, libsecret et Seahorse pour mémoriser les
-  passphrases SSH. Activer les unités utilisateur fournies par les paquets, sans
+  passphrases SSH. Ne pas installer `libpam-gnome-keyring` : purger le paquet et
+  le bloquer par un pin APT `-1`. Sinon swaylock (via `common-auth`) déverrouille
+  le trousseau texte avec le mot de passe de session, qui devient son mot de passe
+  principal et le chiffre à la prochaine écriture.
+  Activer les unités utilisateur fournies par les paquets, sans
   service personnalisé ni linger. Exporter `SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/gcr/ssh`.
 - L'utilisateur remplace l'ancien export du socket et retire l'unité OpenSSH
   `ssh-agent.service` ainsi que son lien d'activation dans ses dotfiles. Arrêter
@@ -145,7 +149,8 @@ possible ; distinguer les changements réellement nécessaires des vérification
 - Seuls le lanceur de session et la configuration greetd restent dans les
   templates du rôle desktop. Pas de verrouillage ni de redémarrage automatique
   du bureau : greetd est activé pour le prochain démarrage.
-- Le rôle `dev` regroupe Docker, VS Code, les IDE JetBrains, SDKMAN, NVM et
+- Le rôle `dev` regroupe Ansible (paquets Debian `ansible`, `ssh-askpass`, `yamllint` et
+  `python-is-python3` pour les vérifications du dépôt, tag `ansible`), Docker, VS Code, les IDE JetBrains, SDKMAN, NVM et
   Bruno. Docker vient des paquets Debian (`docker.io`, `docker-compose`,
   `docker-buildx`), l'utilisateur est ajouté au groupe `docker` et le service
   est activé.

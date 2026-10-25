@@ -47,7 +47,7 @@ class DesktopToolsTests(unittest.TestCase):
     def test_uses_packaged_gcr_and_keyring_units_without_creating_ssh_keys(self):
         tasks = yaml.safe_load((TASKS / 'keyring.yml').read_text())
         packages = tasks[0]['ansible.builtin.apt']['name']
-        for package in ['gcr4', 'gnome-keyring', 'libpam-gnome-keyring', 'seahorse']:
+        for package in ['gcr4', 'gnome-keyring', 'seahorse']:
             self.assertIn(package, packages)
         units = next(task for task in tasks if task.get('ansible.builtin.systemd_service', {}).get('scope') == 'global')
         self.assertEqual(units['ansible.builtin.systemd_service']['scope'], 'global')
@@ -66,9 +66,18 @@ class DesktopToolsTests(unittest.TestCase):
         for command in ['ssh-keygen', 'ssh-add', 'enable-linger', '--unlock']:
             self.assertNotIn(command, str(tasks))
 
+    def test_keyring_removes_pam_password_synchronization_on_existing_hosts(self):
+        tasks = yaml.safe_load((TASKS / 'keyring.yml').read_text())
+        self.assertNotIn('libpam-gnome-keyring', tasks[0]['ansible.builtin.apt']['name'])
+        pin = tasks[1]['ansible.builtin.copy']
+        self.assertEqual(pin['dest'], '/etc/apt/preferences.d/no-libpam-gnome-keyring')
+        self.assertIn('Package: libpam-gnome-keyring\nPin: release *\nPin-Priority: -1\n', pin['content'])
+        removal = tasks[2]['ansible.builtin.apt']
+        self.assertEqual(removal, {'name': 'libpam-gnome-keyring', 'state': 'absent', 'purge': True})
+
     def test_keyring_initialization_never_overwrites_existing_secrets(self):
         tasks = yaml.safe_load((TASKS / 'keyring.yml').read_text())
-        copies = [task['ansible.builtin.copy'] for task in tasks if 'ansible.builtin.copy' in task]
+        copies = [task['ansible.builtin.copy'] for task in tasks if '/.local/share/keyrings/' in task.get('ansible.builtin.copy', {}).get('dest', '')]
         self.assertEqual(len(copies), 2)
         for task in copies:
             self.assertFalse(task['force'])

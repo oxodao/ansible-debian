@@ -1,0 +1,12 @@
+---
+- name: 'Install Ansible and the tools used to check this repository'
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    state: 'present'
+    name:
+      - 'ansible'
+      - 'python-is-python3'
+      - 'ssh-askpass'
+      - 'yamllint'

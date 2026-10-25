@@ -6,10 +6,26 @@
     name:
       - 'gcr4'
       - 'gnome-keyring'
-      - 'libpam-gnome-keyring'
       - 'libsecret-1-0'
       - 'python3-dbus'
       - 'seahorse'
+
+- name: 'Forbid APT from reinstalling the PAM keyring integration'
+  ansible.builtin.copy:
+    dest: '/etc/apt/preferences.d/no-libpam-gnome-keyring'
+    content: |
+      Package: libpam-gnome-keyring
+      Pin: release *
+      Pin-Priority: -1
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+
+- name: 'Remove PAM keyring integration to keep its password independent from the login password'
+  ansible.builtin.apt:
+    name: 'libpam-gnome-keyring'
+    state: 'absent'
+    purge: true
 
 - name: 'Create the private user keyring directory'
   ansible.builtin.file:

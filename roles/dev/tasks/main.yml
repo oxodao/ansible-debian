@@ -1,4 +1,8 @@
 ---
+- name: 'Install Ansible'
+  ansible.builtin.import_tasks: 'ansible.yml'
+  tags: ['ansible']
+
 - name: 'Install Docker and its command-line tools'
   ansible.builtin.import_tasks: 'docker.yml'
   tags: ['docker']

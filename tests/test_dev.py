@@ -21,6 +21,13 @@ class DevTests(unittest.TestCase):
         role = next(role for role in site['roles'] if role['role'] == 'dev')
         self.assertEqual(role['tags'], ['dev'])
 
+    def test_ansible_and_repository_checks_come_from_debian(self):
+        imported = next(task for task in self.tasks if task.get('ansible.builtin.import_tasks') == 'ansible.yml')
+        self.assertEqual(imported['tags'], ['ansible'])
+        tasks = yaml.safe_load((ROLE / 'tasks/ansible.yml').read_text())
+        packages = tasks[0]['ansible.builtin.apt']['name']
+        self.assertEqual(packages, ['ansible', 'python-is-python3', 'ssh-askpass', 'yamllint'])
+
     def test_docker_uses_debian_packages_and_activates_the_service(self):
         tasks = yaml.safe_load((ROLE / 'tasks/docker.yml').read_text())
         packages = tasks[0]['ansible.builtin.apt']['name']
