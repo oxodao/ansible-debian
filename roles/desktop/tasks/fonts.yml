@@ -5,16 +5,43 @@
     state: 'present'
     install_recommends: false
 
-- name: 'Create the system Hack Nerd Font directory'
-  ansible.builtin.file:
-    path: '/usr/local/share/fonts/HackNerdFont'
-    state: 'directory'
-    mode: '0755'
-
-- name: 'Install Hack Nerd Font when it is not already present'
-  ansible.builtin.unarchive:
-    src: 'https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Hack.tar.xz'
-    dest: '/usr/local/share/fonts/HackNerdFont'
-    remote_src: true
-    creates: '/usr/local/share/fonts/HackNerdFont/HackNerdFont-Regular.ttf'
+- name: 'Install user-provided fonts system-wide'
+  ansible.builtin.copy:
+    src: 'fonts/'
+    dest: '/usr/local/share/fonts/custom/'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+    directory_mode: '0755'
   notify: 'Refresh the font cache'
+
+- name: 'Create the system Nerd Font directories'
+  ansible.builtin.file:
+    path: '/usr/local/share/fonts/{{ item.name }}NerdFont'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  loop: '{{ nerd_fonts }}'
+  loop_control:
+    label: '{{ item.name }}'
+
+- name: 'Install Nerd Fonts when they are not already present'
+  ansible.builtin.unarchive:
+    src: 'https://github.com/ryanoasis/nerd-fonts/releases/latest/download/{{ item.name }}.tar.xz'
+    dest: '/usr/local/share/fonts/{{ item.name }}NerdFont'
+    remote_src: true
+    owner: 'root'
+    group: 'root'
+    creates: '/usr/local/share/fonts/{{ item.name }}NerdFont/{{ item.font_file }}'
+  loop: '{{ nerd_fonts }}'
+  loop_control:
+    label: '{{ item.name }}'
+  notify: 'Refresh the font cache'
+
+- name: 'Set the GTK interface font to DepartureMono Nerd Font'
+  become_user: '{{ desktop_user }}'
+  community.general.dconf:
+    key: '/org/gnome/desktop/interface/font-name'
+    value: '''DepartureMono Nerd Font 11'''
+    state: 'present'

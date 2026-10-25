@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 host_vars/*.yml
 !host_vars/*.dist.yml
+/roles/desktop/files/fonts/**/*
+!/roles/desktop/files/fonts/.gitkeep

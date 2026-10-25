@@ -4,3 +4,46 @@ sid_components: 'main contrib non-free non-free-firmware'
 # Uniquement les applications Flatpak système, pas APT ni VS Code.
 flatpak_auto_update: true
 flatpak_update_calendar: 'daily'
+
+nerd_fonts:
+  - name: 'Hack'
+    font_file: 'HackNerdFont-Regular.ttf'
+
+  - name: 'AdwaitaMono'
+    font_file: 'AdwaitaMonoNerdFont-Regular.ttf'
+
+  - name: 'DepartureMono'
+    font_file: 'DepartureMonoNerdFont-Regular.otf'
+
+  - name: 'FiraCode'
+    font_file: 'FiraCodeNerdFont-Regular.ttf'
+
+  - name: 'FiraMono'
+    font_file: 'FiraMonoNerdFont-Regular.otf'
+
+  - name: 'Iosevka'
+    font_file: 'IosevkaNerdFont-Regular.ttf'
+
+  - name: 'IosevkaTerm'
+    font_file: 'IosevkaTermNerdFont-Regular.ttf'
+
+  - name: 'JetBrainsMono'
+    font_file: 'JetBrainsMonoNerdFont-Regular.ttf'
+
+  - name: 'Noto'
+    font_file: 'NotoMonoNerdFont-Regular.ttf'
+
+  - name: 'RobotoMono'
+    font_file: 'RobotoMonoNerdFont-Regular.ttf'
+
+  - name: 'SourceCodePro'
+    font_file: 'SauceCodeProNerdFont-Regular.ttf'
+
+  - name: 'Ubuntu'
+    font_file: 'UbuntuNerdFont-Regular.ttf'
+
+  - name: 'UbuntuMono'
+    font_file: 'UbuntuMonoNerdFont-Regular.ttf'
+
+  - name: 'UbuntuSans'
+    font_file: 'UbuntuSansMonoNerdFont-Regular.ttf'

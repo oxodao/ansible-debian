@@ -85,6 +85,42 @@ class DevTests(unittest.TestCase):
         self.assertEqual(remove_old['ansible.builtin.file']['state'], 'absent')
         self.assertFalse(any(task['name'].startswith('Explain how') for task in tasks))
 
+    def test_vscode_installs_only_missing_extensions_from_remote_dotfiles(self):
+        tasks = yaml.safe_load((ROLE / 'tasks/vscode.yml').read_text())
+        read = next(task for task in tasks if task['name'].startswith('Read the VS Code extension'))
+        self.assertEqual(read['ansible.builtin.slurp']['src'], '/opt/dotfiles/vscode_extensions.txt')
+        self.assertEqual(read['register'], 'vscode_extensions')
+        installed = next(task for task in tasks if task['name'].startswith('List installed VS Code extensions'))
+        self.assertEqual(installed['ansible.builtin.command']['argv'], ['/opt/code/bin/code', '--list-extensions'])
+        self.assertFalse(installed['changed_when'])
+        install = next(task for task in tasks if task['name'].startswith('Install missing VS Code extensions'))
+        self.assertEqual(install['ansible.builtin.command']['argv'], ['/opt/code/bin/code', '--install-extension', '{{ item }}'])
+        self.assertIn('vscode_extensions.content | b64decode', install['loop'])
+        self.assertIn('splitlines()', install['loop'])
+        self.assertIn("reject('equalto', '')", install['loop'])
+        self.assertIn('unique', install['loop'])
+        self.assertEqual(install['when'], "item | lower not in (vscode_installed_extensions.stdout_lines | default([]) | map('lower') | list)")
+        for task in (read, installed, install):
+            self.assertEqual(task['become_user'], '{{ desktop_user }}')
+        for task in (installed, install):
+            self.assertEqual(task['environment']['HOME'], '/home/{{ desktop_user }}')
+        self.assertFalse(any('--uninstall-extension' in str(task) for task in tasks))
+
+    def test_neon_dreams_is_checked_on_every_vscode_run(self):
+        tasks = yaml.safe_load((ROLE / 'tasks/vscode.yml').read_text())
+        locate = next(task for task in tasks if task['name'].startswith('Locate the installed SynthWave'))
+        self.assertEqual(locate['ansible.builtin.command']['argv'], ['/opt/code/bin/code', '--locate-extension', 'robbowen.synthwave-vscode'])
+        self.assertEqual(locate['become_user'], '{{ desktop_user }}')
+        self.assertFalse(locate['changed_when'])
+        enable = next(task for task in tasks if task['name'].startswith('Enable Neon Dreams'))
+        self.assertIn('files/enable_neon_dreams.py', enable['ansible.builtin.script']['cmd'])
+        self.assertIn('/opt/code', enable['ansible.builtin.script']['cmd'])
+        self.assertIn('/.config/Code/User/settings.json', enable['ansible.builtin.script']['cmd'])
+        self.assertEqual(enable['ansible.builtin.script']['executable'], '/usr/bin/python3')
+        self.assertEqual(enable['changed_when'], "'changed' in vscode_neon_dreams.stdout_lines")
+        self.assertNotIn('when', enable)
+        self.assertNotIn('creates', enable['ansible.builtin.script'])
+
     def test_jetbrains_products_and_installation_layout(self):
         products = {product['code']: product for product in self.defaults['jetbrains_products']}
         self.assertEqual(set(products), {'PS', 'DG', 'IIU'})

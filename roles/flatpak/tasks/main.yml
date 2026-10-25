@@ -26,6 +26,26 @@
     - 'com.orama_interactive.Pixelorama'
     - 'com.spotify.Client'
     - 'dev.vencord.Vesktop'
+    - 'org.signal.Signal'
+
+- name: 'Create the system Flatpak overrides directory'
+  ansible.builtin.file:
+    path: '/var/lib/flatpak/overrides'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+
+- name: 'Allow Signal to access host files'
+  community.general.ini_file:
+    path: '/var/lib/flatpak/overrides/org.signal.Signal'
+    section: 'Context'
+    option: 'filesystems'
+    value: 'host;'
+    no_extra_spaces: true
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
 
 - name: 'Check whether Creality Print is installed'
   ansible.builtin.command:

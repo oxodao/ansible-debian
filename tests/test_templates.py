@@ -60,6 +60,7 @@ class TemplateTests(unittest.TestCase):
         config = tomllib.loads(self.render("greetd.toml.j2"))
         self.assertEqual(config["terminal"]["vt"], 7)
         self.assertEqual(config["default_session"]["user"], "_greetd")
+        self.assertEqual(config["default_session"]["command"], "/usr/sbin/agreety --cmd /usr/local/bin/start-sway")
         self.assertEqual(config["initial_session"]["user"], "testuser")
         self.assertEqual(config["initial_session"]["command"], "/usr/local/bin/start-sway")
 

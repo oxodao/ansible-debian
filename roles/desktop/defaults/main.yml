@@ -5,5 +5,9 @@ scenefx_version: '0.5'
 wlroots_version: '0.20.0'
 swayfx_source_directory: '/tmp/autodebian-swayfx-{{ desktop_user }}'
 
+nerd_fonts:
+  - name: 'Hack'
+    font_file: 'HackNerdFont-Regular.ttf'
+
 google_chrome_apt_uri: 'https://dl.google.com/linux/chrome/deb/'
 google_chrome_apt_key_url: 'https://dl.google.com/linux/linux_signing_key.pub'

@@ -64,8 +64,9 @@
   ansible.builtin.import_tasks: 'metaprint.yml'
   tags: ['metaprint']
 
-- name: 'Install the terminal font required by the dotfiles'
+- name: 'Install Nerd Fonts and user-provided fonts'
   ansible.builtin.import_tasks: 'fonts.yml'
+  tags: ['fonts']
 
 - name: 'Fetch Oh My Zsh without executing its installer'
   become_user: '{{ desktop_user }}'

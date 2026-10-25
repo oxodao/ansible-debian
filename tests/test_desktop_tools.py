@@ -171,7 +171,7 @@ class DesktopToolsTests(unittest.TestCase):
         tasks = yaml.safe_load((TASKS / 'packages.yml').read_text())
         packages = tasks[1]['ansible.builtin.apt']['name']
         for package in [
-            'thunar', 'thunar-volman', 'thunar-archive-plugin', 'tumbler',
+            'nemo', 'nemo-fileroller', 'tumbler',
             'gvfs', 'gvfs-backends', 'gvfs-fuse', 'file-roller',
             'libgdk-pixbuf2.0-bin', 'heif-gdk-pixbuf', 'libjxl-gdk-pixbuf',
             'gedit', 'mpv', 'mupdf', 'vlc',

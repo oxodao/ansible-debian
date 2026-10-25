@@ -55,6 +55,30 @@ class DesktopApplicationsTests(unittest.TestCase):
         self.assertIn('org.freedesktop.impl.portal.Screenshot=wlr', content)
         self.assertIn('org.freedesktop.impl.portal.Secret=gnome-keyring', content)
 
+    def test_signal_is_installed_from_flathub_system_wide(self):
+        tasks = yaml.safe_load((ROOT / 'roles/flatpak/tasks/main.yml').read_text())
+        task = next(task for task in tasks if task['name'] == 'Install apps via system Flatpak')
+        self.assertIn('org.signal.Signal', task['loop'])
+        flatpak = task['community.general.flatpak']
+        self.assertEqual(flatpak['remote'], 'flathub')
+        self.assertEqual(flatpak['method'], 'system')
+        self.assertEqual(flatpak['state'], 'present')
+
+    def test_signal_has_system_wide_host_filesystem_access(self):
+        tasks = yaml.safe_load((ROOT / 'roles/flatpak/tasks/main.yml').read_text())
+        directory = next(task for task in tasks if task['name'] == 'Create the system Flatpak overrides directory')
+        self.assertEqual(directory['ansible.builtin.file']['path'], '/var/lib/flatpak/overrides')
+        self.assertEqual(directory['ansible.builtin.file']['state'], 'directory')
+        task = next(task for task in tasks if task['name'] == 'Allow Signal to access host files')
+        override = task['community.general.ini_file']
+        self.assertEqual(override['path'], '/var/lib/flatpak/overrides/org.signal.Signal')
+        self.assertEqual(override['section'], 'Context')
+        self.assertEqual(override['option'], 'filesystems')
+        self.assertEqual(override['value'], 'host;')
+        self.assertTrue(override['no_extra_spaces'])
+        self.assertEqual(override['owner'], 'root')
+        self.assertEqual(override['mode'], '0644')
+
     def test_browser_tasks_are_imported(self):
         tasks = yaml.safe_load((TASKS / 'main.yml').read_text())
         imported = {task.get('ansible.builtin.import_tasks'): task for task in tasks if 'ansible.builtin.import_tasks' in task}

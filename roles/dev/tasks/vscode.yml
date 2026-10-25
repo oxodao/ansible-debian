@@ -124,3 +124,43 @@
       StartupWMClass=Code
       Categories=Development;IDE;TextEditor;
       MimeType=application/x-code-workspace;
+
+- name: 'Read the VS Code extension list from dotfiles'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.slurp:
+    src: '/opt/dotfiles/vscode_extensions.txt'
+  register: 'vscode_extensions'
+
+- name: 'List installed VS Code extensions'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/opt/code/bin/code', '--list-extensions']
+  environment:
+    HOME: '/home/{{ desktop_user }}'
+  register: 'vscode_installed_extensions'
+  changed_when: false
+
+- name: 'Install missing VS Code extensions'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/opt/code/bin/code', '--install-extension', '{{ item }}']
+  environment:
+    HOME: '/home/{{ desktop_user }}'
+  loop: '{{ (vscode_extensions.content | b64decode).splitlines() | map(''trim'') | reject(''equalto'', '''') | unique | list }}'
+  when: 'item | lower not in (vscode_installed_extensions.stdout_lines | default([]) | map(''lower'') | list)'
+
+- name: 'Locate the installed SynthWave extension'
+  become_user: '{{ desktop_user }}'
+  ansible.builtin.command:
+    argv: ['/opt/code/bin/code', '--locate-extension', 'robbowen.synthwave-vscode']
+  environment:
+    HOME: '/home/{{ desktop_user }}'
+  register: 'vscode_synthwave_extension'
+  changed_when: false
+
+- name: 'Enable Neon Dreams in the current VS Code installation'
+  ansible.builtin.script:
+    cmd: '{{ role_path }}/files/enable_neon_dreams.py {{ vscode_synthwave_extension.stdout | trim | quote }} /opt/code {{ (''/home/'' ~ desktop_user ~ ''/.config/Code/User/settings.json'') | quote }}'
+    executable: '/usr/bin/python3'
+  register: 'vscode_neon_dreams'
+  changed_when: '''changed'' in vscode_neon_dreams.stdout_lines'
