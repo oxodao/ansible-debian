@@ -1,0 +1,35 @@
+---
+- name: 'Resolve the latest published miniscr release'
+  ansible.builtin.uri:
+    url: 'https://api.github.com/repos/oxodao/miniscr/releases/latest'
+    return_content: true
+    headers:
+      Accept: 'application/vnd.github+json'
+  register: 'miniscr_release'
+  check_mode: false
+
+- name: 'Select the architecture-independent Debian package'
+  ansible.builtin.set_fact:
+    miniscr_assets: '{{ miniscr_release.json.assets | selectattr("name", "match", "^miniscr_.*_all\\.deb$") | list }}'
+
+- name: 'Require a unique published Debian package'
+  ansible.builtin.assert:
+    that: 'miniscr_assets | length == 1'
+    fail_msg: 'Aucun paquet miniscr all.deb unique dans la release {{ miniscr_release.json.tag_name }}.'
+
+- name: 'Download the miniscr Debian package from the GitHub release'
+  ansible.builtin.get_url:
+    url: '{{ miniscr_assets[0].browser_download_url }}'
+    checksum: '{{ miniscr_assets[0].digest | default(omit, true) }}'
+    dest: '/var/cache/apt/archives/{{ miniscr_assets[0].name }}'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+
+- name: 'Install miniscr and its dependencies with APT'
+  ansible.builtin.apt:
+    deb: '/var/cache/apt/archives/{{ miniscr_assets[0].name }}'
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    state: 'present'

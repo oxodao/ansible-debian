@@ -64,6 +64,9 @@
   ansible.builtin.import_tasks: 'metaprint.yml'
   tags: ['metaprint']
 
+- name: 'Install miniscr from its latest release'
+  ansible.builtin.import_tasks: 'miniscr.yml'
+
 - name: 'Install Nerd Fonts and user-provided fonts'
   ansible.builtin.import_tasks: 'fonts.yml'
   tags: ['fonts']
